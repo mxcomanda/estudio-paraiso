@@ -274,7 +274,7 @@
       .cal-day.sel{background:var(--green);color:#fff;font-weight:700}
       .cal-day:disabled{color:#c9c2b4;cursor:default;background:none}
       .cal-day.today{outline:1.5px solid var(--gold);outline-offset:-1.5px}
-      .cal-day.booked{box-shadow:inset 0 -3px 0 var(--gold-2)}
+      .cal-day.day-booked{box-shadow:inset 0 -3px 0 var(--gold-2)}
       .cal-legend{font-size:.75rem;color:var(--ink-soft);margin-top:8px;display:flex;align-items:center;gap:6px}
       .cal-legend i{width:10px;height:3px;background:var(--gold-2);display:inline-block}
       .warn{
@@ -1208,7 +1208,7 @@
             var cls = 'cal-day';
             if(sel && sel.y === y && sel.m === m && sel.d === d) cls += ' sel';
             if(date.getTime() === now.getTime()) cls += ' today';
-            if(bookingsOn(isoOf(y, m, d)).length) cls += ' booked';
+            if(bookingsOn(isoOf(y, m, d)).length) cls += ' day-booked';
             html += '<button type="button" class="' + cls + '" data-day="' + d + '"' + dis + '>' + d + '</button>';
           }
           html += '</div><div class="cal-legend"><i></i> Día con reserva</div>';
