@@ -214,6 +214,20 @@
       .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--gold);outline-offset:1px;border-color:var(--gold)}
       .field .hint{font-size:.82rem;color:var(--ink-soft)}
       .field.invalid input,.field.invalid select{border-color:#b3372a;outline-color:#b3372a}
+      .field{position:relative}
+      #dateDisplay{cursor:pointer;background:#fff}
+      .cal{position:absolute;top:100%;left:0;right:0;z-index:30;margin-top:6px;background:#fff;border:1.5px solid var(--line);border-radius:14px;box-shadow:0 18px 40px rgba(7,20,38,.25);padding:12px}
+      .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+      .cal-head b{font-family:"Playfair Display",serif;color:var(--green);font-size:1.05rem;text-transform:capitalize}
+      .cal-nav{border:1.5px solid var(--line);background:#fff;border-radius:8px;width:34px;height:34px;min-height:34px;font-size:1.1rem;line-height:1;cursor:pointer;color:var(--green);padding:0}
+      .cal-nav:disabled{opacity:.35;cursor:default}
+      .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+      .cal-grid .dow{font-size:.72rem;font-weight:700;color:var(--ink-soft);padding:4px 0}
+      .cal-day{border:none;background:none;border-radius:8px;min-height:36px;height:36px;font-size:.95rem;cursor:pointer;color:var(--ink);padding:0}
+      .cal-day:hover{background:#f2f7f3}
+      .cal-day.sel{background:var(--green);color:#fff;font-weight:700}
+      .cal-day:disabled{color:#c9c2b4;cursor:default;background:none}
+      .cal-day.today{outline:1.5px solid var(--gold);outline-offset:-1.5px}
       .warn{
         display:none;margin-top:10px;background:#fdf3e3;border:1px solid #e8c98a;color:#6d4c08;
         border-radius:10px;padding:10px 14px;font-size:.9rem;
@@ -575,8 +589,10 @@
             <div class="step-label"><span class="dot">2</span> Fecha y horario</div>
             <div class="field-grid">
               <div class="field" id="fDate">
-                <label for="date">Fecha de tu sesión</label>
-                <input type="date" id="date" required />
+                <label for="dateDisplay">Fecha de tu sesión</label>
+                <input type="hidden" id="date" />
+                <input type="text" id="dateDisplay" readonly placeholder="Toca para elegir la fecha" autocomplete="off" aria-haspopup="true" aria-expanded="false" />
+                <div class="cal" id="cal" hidden></div>
               </div>
               <div class="field" id="fTime">
                 <label for="time">Hora de inicio</label>
@@ -991,10 +1007,83 @@
           document.body.removeChild(ta);
         }
 
-        // Fecha mínima: hoy
-        var today = new Date();
-        var iso = today.getFullYear() + "-" + ("0" + (today.getMonth()+1)).slice(-2) + "-" + ("0" + today.getDate()).slice(-2);
-        els.date.min = iso;
+        // Calendario propio dentro de la página: el calendario nativo del
+        // navegador no aplicaba el día al hacer clic en las pruebas, así que
+        // la fecha se elige con botones reales del DOM.
+        var MONTHS = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+        var DOW = ["L","M","X","J","V","S","D"];
+        var calEl = $("cal"), dateDisplay = $("dateDisplay");
+        var calView = (function(){ var n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }; })();
+        function pad2(n){ return ("0" + n).slice(-2); }
+        function isoOf(y, m, d){ return y + "-" + pad2(m+1) + "-" + pad2(d); }
+        function parseISO(v){ var p = v.split("-"); return { y: parseInt(p[0],10), m: parseInt(p[1],10)-1, d: parseInt(p[2],10) }; }
+        function buildCal(){
+          var y = calView.y, m = calView.m;
+          var now = new Date(); now.setHours(0,0,0,0);
+          var first = new Date(y, m, 1);
+          var startCol = (first.getDay() + 6) % 7;
+          var daysInMonth = new Date(y, m+1, 0).getDate();
+          var sel = els.date.value ? parseISO(els.date.value) : null;
+          var isCurrentMonth = (y === now.getFullYear() && m === now.getMonth());
+          var html = '<div class="cal-head">'
+            + '<button type="button" class="cal-nav" id="calPrev" aria-label="Mes anterior"' + (isCurrentMonth ? ' disabled' : '') + '>‹</button>'
+            + '<b>' + MONTHS[m] + ' ' + y + '</b>'
+            + '<button type="button" class="cal-nav" id="calNext" aria-label="Mes siguiente">›</button>'
+            + '</div><div class="cal-grid">';
+          DOW.forEach(function(d){ html += '<span class="dow">' + d + '</span>'; });
+          for(var i = 0; i < startCol; i++){ html += '<span></span>'; }
+          for(var d = 1; d <= daysInMonth; d++){
+            var date = new Date(y, m, d);
+            var dis = date < now ? ' disabled' : '';
+            var cls = 'cal-day';
+            if(sel && sel.y === y && sel.m === m && sel.d === d) cls += ' sel';
+            if(date.getTime() === now.getTime()) cls += ' today';
+            html += '<button type="button" class="' + cls + '" data-day="' + d + '"' + dis + '>' + d + '</button>';
+          }
+          html += '</div>';
+          calEl.innerHTML = html;
+        }
+        function openCal(){
+          var sel = els.date.value ? parseISO(els.date.value) : null;
+          var n = new Date();
+          calView = sel ? { y: sel.y, m: sel.m } : { y: n.getFullYear(), m: n.getMonth() };
+          buildCal();
+          calEl.hidden = false;
+          dateDisplay.setAttribute("aria-expanded", "true");
+        }
+        function closeCal(){
+          calEl.hidden = true;
+          dateDisplay.setAttribute("aria-expanded", "false");
+        }
+        dateDisplay.addEventListener("click", function(e){
+          e.stopPropagation();
+          if(calEl.hidden){ openCal(); } else { closeCal(); }
+        });
+        calEl.addEventListener("click", function(e){
+          e.stopPropagation();
+          var t = e.target;
+          if(t.id === "calPrev"){
+            if(calView.m === 0){ calView.m = 11; calView.y--; } else { calView.m--; }
+            buildCal();
+            return;
+          }
+          if(t.id === "calNext"){
+            if(calView.m === 11){ calView.m = 0; calView.y++; } else { calView.m++; }
+            buildCal();
+            return;
+          }
+          var dayBtn = (t.classList && t.classList.contains("cal-day")) ? t : null;
+          if(!dayBtn || dayBtn.disabled) return;
+          var d = parseInt(dayBtn.getAttribute("data-day"), 10);
+          els.date.value = isoOf(calView.y, calView.m, d);
+          dateDisplay.value = fmtDate(els.date.value);
+          closeCal();
+          render();
+        });
+        document.addEventListener("click", function(e){
+          if(!calEl.hidden && !calEl.contains(e.target) && e.target !== dateDisplay) closeCal();
+        });
+        document.addEventListener("keydown", function(e){ if(e.key === "Escape") closeCal(); });
 
         els.optNatural.addEventListener("click", function(){ state.pack = "natural"; render(); });
         els.optArtificial.addEventListener("click", function(){ state.pack = "artificial"; render(); });
@@ -1002,10 +1091,6 @@
           els[id].addEventListener("change", render);
           els[id].addEventListener("input", render);
         });
-        // La fecha solo se recalcula al confirmarla (change): si se recalcula
-        // con cada tecla (input), el calendario nativo se cierra y el día
-        // elegido no se guarda.
-        els.date.addEventListener("change", render);
         els.name.addEventListener("input", render);
         els.notes.addEventListener("input", render);
 
