@@ -203,6 +203,12 @@
       .pay-data dl.pay-rows .pay-row{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
       .pay-data dl.pay-rows dt{flex:none}
       .pay-data dl.pay-rows dd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;text-align:right}
+      .pay-data dl.pay-rows dd span{min-width:0;overflow-wrap:anywhere;word-break:break-all}
+      .pay-data dl.pay-rows dd .copy-btn{flex:none}
+      @media (max-width:560px){
+        .pay-data dl.pay-rows .pay-row{flex-direction:column;gap:4px;align-items:flex-start}
+        .pay-data dl.pay-rows dd{justify-content:flex-start;text-align:left;width:100%}
+      }
       .copy-btn{flex:none;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:.8rem;font-weight:600;cursor:pointer;color:var(--green);min-height:0}
       .copy-btn:hover{border-color:var(--gold)}
       .copy-btn.done{background:var(--green);border-color:var(--green);color:#fff}
@@ -268,6 +274,9 @@
       .cal-day.sel{background:var(--green);color:#fff;font-weight:700}
       .cal-day:disabled{color:#c9c2b4;cursor:default;background:none}
       .cal-day.today{outline:1.5px solid var(--gold);outline-offset:-1.5px}
+      .cal-day.booked{box-shadow:inset 0 -3px 0 var(--gold-2)}
+      .cal-legend{font-size:.75rem;color:var(--ink-soft);margin-top:8px;display:flex;align-items:center;gap:6px}
+      .cal-legend i{width:10px;height:3px;background:var(--gold-2);display:inline-block}
       .warn{
         display:none;margin-top:10px;background:#fdf3e3;border:1px solid #e8c98a;color:#6d4c08;
         border-radius:10px;padding:10px 14px;font-size:.9rem;
@@ -687,6 +696,7 @@
                 <input type="hidden" id="date" />
                 <input type="text" id="dateDisplay" readonly placeholder="Toca para elegir la fecha" autocomplete="off" aria-haspopup="true" aria-expanded="false" />
                 <div class="cal" id="cal" hidden></div>
+                <span class="hint" id="dayBookings"></span>
               </div>
               <div class="field" id="fTime">
                 <label for="time">Hora de inicio</label>
@@ -722,6 +732,7 @@
                 <span class="hint" id="peopleHint">Máximo 5 personas en este paquete.</span>
               </div>
             </div>
+            <div class="warn" id="slotWarn">Ese horario ya está reservado para esa fecha. Elige otra hora u otro día.</div>
             <div class="warn" id="peopleWarn">Este paquete incluye hasta <b id="peopleWarnMax">5</b> personas. Cada persona extra cuesta <b>$200 MXN</b> y ya está sumada a tu total.</div>
             <div class="warn" id="naturalWarn">Tip: con luz natural, el horario recomendado es de <b>9:00 a.m. a 2:00 p.m.</b>, cuando entra más luz por los ventanales.</div>
 
@@ -944,6 +955,28 @@
           return s.charAt(0).toUpperCase() + s.slice(1);
         }
 
+        // Disponibilidad: horarios ya confirmados (reservas.json, actualizado
+        // por Muse cada vez que se confirma o se cancela una reserva).
+        var BOOKINGS = [];
+        function toMin(v){ var p = v.split(":"); return parseInt(p[0],10)*60 + parseInt(p[1],10); }
+        function bookingsOn(iso){ return BOOKINGS.filter(function(b){ return b.date === iso; }); }
+        function slotConflict(){
+          var iso = els.date.value;
+          var t = parseTime(els.time.value);
+          if(!iso || !t) return null;
+          var start = t.h*60 + t.m;
+          var end = start + parseInt(els.hours.value,10)*60;
+          var hit = null;
+          bookingsOn(iso).forEach(function(b){
+            if(start < toMin(b.end) && end > toMin(b.start)) hit = b;
+          });
+          return hit;
+        }
+        fetch("reservas.json", { cache: "no-store" })
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(j){ if(j && j.bookings){ BOOKINGS = j.bookings; buildCal(); render(); } })
+          .catch(function(){});
+
         function calc(){
           var pack = PRICES[state.pack];
           var hours = parseInt(els.hours.value,10);
@@ -1044,6 +1077,23 @@
           var naturalTip = state.pack === "natural" && t && (t.h < 9 || t.h >= 14);
           els.naturalWarn.classList.toggle("show", !!naturalTip);
 
+          var conflict = slotConflict();
+          var dayB = els.date.value ? bookingsOn(els.date.value) : [];
+          var dbEl = $("dayBookings");
+          if(dbEl){
+            dbEl.textContent = dayB.length ? ("Reservado ese día: " + dayB.map(function(b){ return b.start + "–" + b.end; }).join(", ") + ".") : "";
+          }
+          var sw = $("slotWarn");
+          if(sw){
+            if(conflict){
+              sw.textContent = "Ese horario ya está reservado (" + conflict.start + "–" + conflict.end + "). Elige otra hora u otro día.";
+              sw.classList.add("show");
+            } else {
+              sw.classList.remove("show");
+            }
+          }
+          els.fTime.classList.toggle("invalid", !!conflict);
+
           els.staffToggle.setAttribute("aria-pressed", state.staff ? "true" : "false");
           els.staffToggle.textContent = state.staff ? "Añadido ✓" : "Añadir";
           els.cycloToggle.setAttribute("aria-pressed", state.cycloOn ? "true" : "false");
@@ -1098,6 +1148,14 @@
             ch.wrap.classList.toggle("invalid", bad);
             if(bad) ok = false;
           });
+          var conflict = slotConflict();
+          if(conflict){
+            ok = false;
+            els.fTime.classList.add("invalid");
+            els.formError.textContent = "Ese horario ya está reservado (" + conflict.start + "–" + conflict.end + "). Elige otra hora u otro día.";
+          } else {
+            els.formError.textContent = "Falta algo: revisa tu nombre, la fecha y la hora de inicio para poder armar tu mensaje.";
+          }
           els.formError.classList.toggle("show", !ok);
           return ok;
         }
@@ -1150,9 +1208,10 @@
             var cls = 'cal-day';
             if(sel && sel.y === y && sel.m === m && sel.d === d) cls += ' sel';
             if(date.getTime() === now.getTime()) cls += ' today';
+            if(bookingsOn(isoOf(y, m, d)).length) cls += ' booked';
             html += '<button type="button" class="' + cls + '" data-day="' + d + '"' + dis + '>' + d + '</button>';
           }
-          html += '</div>';
+          html += '</div><div class="cal-legend"><i></i> Día con reserva</div>';
           calEl.innerHTML = html;
         }
         function openCal(){
@@ -1253,13 +1312,24 @@
           });
         });
         els.copyMsg.addEventListener("click", function(){
+          if(!validate()){
+            document.getElementById("bookingForm").scrollIntoView({ behavior:"smooth", block:"start" });
+            return;
+          }
           copyText(render()).then(function(){
             els.copiedNote.classList.add("show");
             showBooked();
             setTimeout(function(){ els.copiedNote.classList.remove("show"); }, 4000);
           });
         });
-        els.mailBtn.addEventListener("click", function(){ showBooked(); });
+        els.mailBtn.addEventListener("click", function(e){
+          if(!validate()){
+            e.preventDefault();
+            document.getElementById("bookingForm").scrollIntoView({ behavior:"smooth", block:"start" });
+            return;
+          }
+          showBooked();
+        });
 
         render();
       })();
