@@ -1094,6 +1094,16 @@
           }
           els.fTime.classList.toggle("invalid", !!conflict);
 
+          // Sincroniza el cuadro de error del paso 5: si el usuario cambió
+          // la hora o el día después de un intento fallido, no dejes el mensaje viejo.
+          if(els.formError.classList.contains("show")){
+            if(conflict){
+              els.formError.textContent = "Ese horario ya está reservado (" + conflict.start + "–" + conflict.end + "). Elige otra hora u otro día.";
+            } else if(els.name.value.trim() && els.date.value && els.time.value){
+              els.formError.classList.remove("show");
+            }
+          }
+
           els.staffToggle.setAttribute("aria-pressed", state.staff ? "true" : "false");
           els.staffToggle.textContent = state.staff ? "Añadido ✓" : "Añadir";
           els.cycloToggle.setAttribute("aria-pressed", state.cycloOn ? "true" : "false");
