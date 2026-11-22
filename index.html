@@ -818,7 +818,9 @@
         function fmtDate(v){
           if(!v) return null;
           var p = v.split("-");
+          if(p.length < 3) return null;
           var d = new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10));
+          if(isNaN(d.getTime())) return null;
           var s = new Intl.DateTimeFormat("es-MX",{ weekday:"long", day:"numeric", month:"long", year:"numeric" }).format(d);
           return s.charAt(0).toUpperCase() + s.slice(1);
         }
@@ -996,10 +998,14 @@
 
         els.optNatural.addEventListener("click", function(){ state.pack = "natural"; render(); });
         els.optArtificial.addEventListener("click", function(){ state.pack = "artificial"; render(); });
-        ["date","time","hours","people","ptype","cycloColor"].forEach(function(id){
+        ["time","hours","people","ptype","cycloColor"].forEach(function(id){
           els[id].addEventListener("change", render);
           els[id].addEventListener("input", render);
         });
+        // La fecha solo se recalcula al confirmarla (change): si se recalcula
+        // con cada tecla (input), el calendario nativo se cierra y el día
+        // elegido no se guarda.
+        els.date.addEventListener("change", render);
         els.name.addEventListener("input", render);
         els.notes.addEventListener("input", render);
 
